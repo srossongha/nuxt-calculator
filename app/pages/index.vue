@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // app/pages/index.vue
-// ^ Clean Scientific Calculator powered by Pinia State Management
+// ^ Clean, Professional Scientific Calculator powered by Pinia State Management
 // & State, Getters, and Actions are managed centrally in `app/stores/calculator.ts`
 
 import { storeToRefs } from 'pinia'
@@ -38,6 +38,8 @@ const {
   answer,
   lastAnswer,
   cursor,
+  angleMode,
+  isShift,
   history,
   soundEnabled,
   isCopied,
@@ -49,11 +51,20 @@ const {
 const {
   inputDigit,
   inputDot,
+  chooseOperator,
+  inputFunction,
+  inputConstant,
+  inputParenthesis,
+  inputPower,
+  inputSquare,
   inputSqrt,
   inputNthRoot,
-  inputAns,
-  chooseOperator,
+  inputFactorial,
+  inputPercentage,
   toggleNegate,
+  toggleAngleMode,
+  toggleShift,
+  inputAns,
   backspace,
   moveCursor,
   equals,
@@ -106,13 +117,46 @@ function handleKeydown(event: KeyboardEvent) {
     chooseOperator('÷')
   } else if (key === '^') {
     event.preventDefault()
-    chooseOperator('^')
+    inputPower()
+  } else if (key === '(' || key === ')') {
+    event.preventDefault()
+    inputParenthesis(key)
+  } else if (key === '!') {
+    event.preventDefault()
+    inputFactorial()
+  } else if (key === '%') {
+    event.preventDefault()
+    inputPercentage()
+  } else if (key.toLowerCase() === 's') {
+    event.preventDefault()
+    inputFunction(isShift.value ? 'asin' : 'sin')
+  } else if (key.toLowerCase() === 'c') {
+    event.preventDefault()
+    inputFunction(isShift.value ? 'acos' : 'cos')
+  } else if (key.toLowerCase() === 't') {
+    event.preventDefault()
+    inputFunction(isShift.value ? 'atan' : 'tan')
+  } else if (key.toLowerCase() === 'l') {
+    event.preventDefault()
+    inputFunction('ln')
+  } else if (key.toLowerCase() === 'g') {
+    event.preventDefault()
+    inputFunction('log')
+  } else if (key.toLowerCase() === 'p') {
+    event.preventDefault()
+    inputConstant('π')
+  } else if (key.toLowerCase() === 'e' && event.ctrlKey === false && event.metaKey === false) {
+    event.preventDefault()
+    inputConstant('e')
   } else if (key.toLowerCase() === 'r') {
     event.preventDefault()
     inputSqrt()
   } else if (key.toLowerCase() === 'a') {
     event.preventDefault()
     inputAns()
+  } else if (key.toLowerCase() === 'd') {
+    event.preventDefault()
+    toggleAngleMode()
   } else if (key === 'Enter' || key === '=') {
     event.preventDefault()
     equals()
@@ -249,7 +293,12 @@ onUnmounted(() => {
                       >
                         <ClipboardDocumentIcon class="size-3.5" />
                       </button>
-                      <span class="truncate text-neutral-400">{{ item.shown }}</span>
+                      <div class="flex items-center gap-1.5">
+                        <span v-if="item.angleMode" class="text-[9px] text-neutral-500 font-sans uppercase">
+                          {{ item.angleMode }}
+                        </span>
+                        <span class="truncate text-neutral-400">{{ item.shown }}</span>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -280,12 +329,30 @@ onUnmounted(() => {
       <!-- ================= Calculator Chassis ================= -->
       <section class="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-4 shadow-2xl backdrop-blur-xl">
         <!-- Screen / Display Unit -->
-        <div class="relative mb-3 flex flex-col justify-between rounded-2xl border border-neutral-800/80 bg-neutral-950 p-4 font-mono select-none">
+        <div class="relative mb-3 flex flex-col justify-between rounded-2xl border border-neutral-800/80 bg-neutral-950 p-3.5 font-mono select-none">
           <!-- Top Sub-bar (Indicators & Copy) -->
-          <div class="flex items-center justify-between text-[10px] text-neutral-500">
+          <div class="flex items-center justify-between text-[10px]">
             <div class="flex items-center gap-2">
-              <span class="font-bold tracking-widest text-neutral-400">DEG</span>
-              <span v-if="lastAnswer !== 0" class="rounded bg-white/5 px-1.5 py-0.5 text-neutral-300">
+              <!-- Angle Mode Toggle (DEG / RAD) -->
+              <button
+                type="button"
+                class="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-bold tracking-wider text-emerald-400 transition hover:bg-emerald-500/20 active:scale-95"
+                title="Click to toggle Degree / Radian mode"
+                @click="toggleAngleMode"
+              >
+                {{ angleMode }}
+              </button>
+
+              <!-- Shift Active Indicator -->
+              <span
+                v-if="isShift"
+                class="animate-pulse rounded border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 font-bold text-amber-300"
+              >
+                2ND
+              </span>
+
+              <!-- Answer Memory Indicator -->
+              <span v-if="lastAnswer !== 0" class="rounded bg-white/5 px-1.5 py-0.5 text-neutral-400">
                 ANS: {{ lastAnswer }}
               </span>
             </div>
@@ -410,41 +477,114 @@ onUnmounted(() => {
 
         <!-- ================= Keypad Grid ================= -->
         <div class="grid grid-cols-4 gap-2">
-          <!-- Row 1: Scientific Functions -->
+          <!-- Row 1: 2nd Function Toggle, Trigonometric Functions -->
           <button
             type="button"
-            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
-            title="Square Root (R)"
-            @click="inputSqrt"
+            :class="[
+              'btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border text-xs font-bold transition',
+              isShift
+                ? 'border-amber-500/60 bg-amber-500/25 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                : 'border-neutral-700/40 bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700/80'
+            ]"
+            title="Toggle 2nd Functions (Shift)"
+            @click="toggleShift"
           >
-            &radic;x
+            2nd
           </button>
           <button
             type="button"
-            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
-            title="Power exponent (^)"
-            @click="chooseOperator('^')"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-xs font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Arcsine (asin)' : 'Sine (sin)'"
+            @click="inputFunction(isShift ? 'asin' : 'sin')"
           >
-            x<sup class="text-[0.75em]">y</sup>
+            {{ isShift ? 'sin⁻¹' : 'sin' }}
           </button>
           <button
             type="button"
-            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
-            title="Nth Root (ⁿ√)"
-            @click="inputNthRoot"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-xs font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Arccosine (acos)' : 'Cosine (cos)'"
+            @click="inputFunction(isShift ? 'acos' : 'cos')"
           >
-            <sup class="text-[0.75em]">y</sup>&radic;x
+            {{ isShift ? 'cos⁻¹' : 'cos' }}
           </button>
           <button
             type="button"
-            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl bg-emerald-600 text-xl font-bold text-white transition hover:bg-emerald-500"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-xs font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Arctangent (atan)' : 'Tangent (tan)'"
+            @click="inputFunction(isShift ? 'atan' : 'tan')"
+          >
+            {{ isShift ? 'tan⁻¹' : 'tan' }}
+          </button>
+
+          <!-- Row 2: Logarithms & Parentheses / Constants -->
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-xs font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Exponential (e^x)' : 'Natural Log (ln)'"
+            @click="isShift ? inputFunction('e^') : inputFunction('ln')"
+          >
+            {{ isShift ? 'eˣ' : 'ln' }}
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-xs font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Power of 10 (10^x)' : 'Common Log (log10)'"
+            @click="isShift ? inputFunction('10^') : inputFunction('log')"
+          >
+            {{ isShift ? '10ˣ' : 'log' }}
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-neutral-200 transition hover:bg-neutral-700/80"
+            title="Open parenthesis ("
+            @click="inputParenthesis('(')"
+          >
+            (
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-neutral-200 transition hover:bg-neutral-700/80"
+            title="Close parenthesis )"
+            @click="inputParenthesis(')')"
+          >
+            )
+          </button>
+
+          <!-- Row 3: Roots, Powers, Constants & Divide -->
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Square (x²)' : 'Square Root (√x)'"
+            @click="isShift ? inputSquare() : inputSqrt()"
+          >
+            {{ isShift ? 'x²' : '√x' }}
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Nth Root (ⁿ√x)' : 'Power exponent (xʸ)'"
+            @click="isShift ? inputNthRoot() : inputPower()"
+          >
+            {{ isShift ? 'ⁿ√x' : 'xʸ' }}
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/70 text-sm font-semibold text-emerald-300 transition hover:bg-neutral-700/80"
+            :title="isShift ? 'Euler number (e)' : 'Pi (π)'"
+            @click="isShift ? inputConstant('e') : inputConstant('π')"
+          >
+            {{ isShift ? 'e' : 'π' }}
+          </button>
+          <button
+            type="button"
+            class="btn-press flex aspect-[1.3/1] items-center justify-center rounded-2xl bg-emerald-600 text-xl font-bold text-white transition hover:bg-emerald-500"
             title="Divide (/)"
             @click="chooseOperator('÷')"
           >
             &divide;
           </button>
 
-          <!-- Row 2: 7, 8, 9, × -->
+          <!-- Row 4: 7, 8, 9, Multiply -->
           <button
             type="button"
             class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800 text-xl font-medium text-white transition hover:bg-neutral-700"
@@ -475,7 +615,7 @@ onUnmounted(() => {
             &times;
           </button>
 
-          <!-- Row 3: 4, 5, 6, − -->
+          <!-- Row 5: 4, 5, 6, Subtract -->
           <button
             type="button"
             class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800 text-xl font-medium text-white transition hover:bg-neutral-700"
@@ -506,7 +646,7 @@ onUnmounted(() => {
             &minus;
           </button>
 
-          <!-- Row 4: 1, 2, 3, + -->
+          <!-- Row 6: 1, 2, 3, Add -->
           <button
             type="button"
             class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800 text-xl font-medium text-white transition hover:bg-neutral-700"
@@ -537,14 +677,14 @@ onUnmounted(() => {
             +
           </button>
 
-          <!-- Row 5: ±, 0, ., = -->
+          <!-- Row 7: Negate / Factorial, 0, Dot, Equals -->
           <button
             type="button"
-            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800 text-base font-semibold text-neutral-300 transition hover:bg-neutral-700 hover:text-white"
-            title="Negate sign (±)"
-            @click="toggleNegate"
+            class="btn-press flex aspect-[1.2/1] items-center justify-center rounded-2xl border border-neutral-700/40 bg-neutral-800/80 text-sm font-semibold text-neutral-300 transition hover:bg-neutral-700"
+            :title="isShift ? 'Factorial (n!)' : 'Toggle sign (±)'"
+            @click="isShift ? inputFactorial() : toggleNegate()"
           >
-            &plusmn;
+            {{ isShift ? 'n!' : '±' }}
           </button>
           <button
             type="button"
@@ -610,28 +750,40 @@ onUnmounted(() => {
                     <span class="font-bold text-white">0 - 9, .</span>
                   </div>
                   <div class="flex justify-between border-b border-white/5 py-1.5">
-                    <span class="text-neutral-400">Arithmetic Operators</span>
+                    <span class="text-neutral-400">Operators</span>
                     <span class="font-bold text-white">+ - * / ^</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/5 py-1.5">
+                    <span class="text-neutral-400">Parentheses</span>
+                    <span class="font-bold text-white">( )</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/5 py-1.5">
+                    <span class="text-neutral-400">Trig (sin, cos, tan)</span>
+                    <span class="font-bold text-white">S, C, T</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/5 py-1.5">
+                    <span class="text-neutral-400">Logs (ln, log)</span>
+                    <span class="font-bold text-white">L, G</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/5 py-1.5">
+                    <span class="text-neutral-400">Constants (π, e)</span>
+                    <span class="font-bold text-white">P, E</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/5 py-1.5">
+                    <span class="text-neutral-400">Toggle DEG / RAD</span>
+                    <span class="font-bold text-emerald-400">D</span>
                   </div>
                   <div class="flex justify-between border-b border-white/5 py-1.5">
                     <span class="text-neutral-400">Calculate</span>
                     <span class="font-bold text-emerald-400">Enter or =</span>
                   </div>
                   <div class="flex justify-between border-b border-white/5 py-1.5">
-                    <span class="text-neutral-400">Backspace (Delete char)</span>
+                    <span class="text-neutral-400">Backspace (DEL)</span>
                     <span class="font-bold text-white">Backspace</span>
                   </div>
                   <div class="flex justify-between border-b border-white/5 py-1.5">
-                    <span class="text-neutral-400">All Clear</span>
+                    <span class="text-neutral-400">All Clear (AC)</span>
                     <span class="font-bold text-rose-400">Escape or Del</span>
-                  </div>
-                  <div class="flex justify-between border-b border-white/5 py-1.5">
-                    <span class="text-neutral-400">Square Root</span>
-                    <span class="font-bold text-white">R</span>
-                  </div>
-                  <div class="flex justify-between border-b border-white/5 py-1.5">
-                    <span class="text-neutral-400">Ans (Previous Memory)</span>
-                    <span class="font-bold text-white">A</span>
                   </div>
                   <div class="flex justify-between py-1.5">
                     <span class="text-neutral-400">Cursor Navigation</span>

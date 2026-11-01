@@ -1,19 +1,25 @@
+// app/stores/calculator.ts
+// ^ Centralized Pinia Store for the Scientific Calculator.
+// & Manages expression, cursor, angle modes, shift mode, calculation history,
+// & audio feedback, and localStorage persistence.
+
 import { defineStore } from 'pinia'
-import type { HistoryItem, DisplayPart, Operator, CursorMove } from '~/utils/types'
+import type {
+  AngleMode,
+  CursorMove,
+  DisplayPart,
+  HistoryItem,
+  Operator,
+} from '~/utils/types'
 import { buildDisplayParts } from '~/utils/display'
 import { dotToInsert, endsWithValue } from '~/utils/input'
 import { evaluateExpression } from '~/utils/parser'
 import { format } from '~/utils/math'
-import { pushHistory, sanitizeHistory, lastAnswerFrom } from '~/utils/history'
-
-export type CalculatorTheme = 'obsidian' | 'cyberpunk' | 'retro-amber' | 'slate'
-
-export interface ActionLogItem {
-  id: number
-  name: string
-  payload?: string | number | null
-  timestamp: string
-}
+import {
+  lastAnswerFrom,
+  pushHistory,
+  sanitizeHistory,
+} from '~/utils/history'
 
 export const useCalculatorStore = defineStore('calculator', () => {
   // =========================================================================
@@ -23,81 +29,70 @@ export const useCalculatorStore = defineStore('calculator', () => {
   const answer = ref<string | null>(null)
   const lastAnswer = ref<number>(0)
   const cursor = ref<number>(0)
+  const angleMode = ref<AngleMode>('DEG')
+  const isShift = ref<boolean>(false)
   const history = ref<HistoryItem[]>([])
-  
-  // UX settings
   const soundEnabled = ref<boolean>(true)
-  const theme = ref<CalculatorTheme>('obsidian')
-  const actionLogs = ref<ActionLogItem[]>([])
   const isCopied = ref<boolean>(false)
-
-  let logIdCounter = 0
 
   // =========================================================================
   // GETTERS (Computed)
   // =========================================================================
   const beforeCursor = computed(() => expr.value.slice(0, cursor.value))
   const afterCursor = computed(() => expr.value.slice(cursor.value))
-  
-  const displayParts = computed<DisplayPart[]>(() => 
+
+  const displayParts = computed<DisplayPart[]>(() =>
     buildDisplayParts(beforeCursor.value, afterCursor.value)
   )
 
   const hasExpression = computed(() => expr.value.length > 0)
   const historyCount = computed(() => history.value.length)
   const isResultReady = computed(() => answer.value !== null)
+  const isDeg = computed(() => angleMode.value === 'DEG')
 
   // =========================================================================
-  // SOUND / HAPTIC FEEDBACK (Web Audio API)
+  // SOUND FEEDBACK (Web Audio API)
   // =========================================================================
-  function playClickSound(type: 'num' | 'op' | 'action' | 'equal' = 'num') {
+  function playClickSound(
+    type: 'num' | 'op' | 'action' | 'equal' | 'shift' = 'num'
+  ) {
     if (!soundEnabled.value || !import.meta.client) return
     try {
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      if (!AudioContextClass) return
-      const ctx = new AudioContextClass()
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
 
       const freqs = {
-        num: 520,
-        op: 680,
-        action: 420,
+        num: 560,
+        op: 720,
+        action: 400,
         equal: 880,
+        shift: 960,
       }
 
       osc.type = 'sine'
       osc.frequency.setValueAtTime(freqs[type] || 500, ctx.currentTime)
 
       gain.gain.setValueAtTime(0.04, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.04)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.035)
 
       osc.connect(gain)
       gain.connect(ctx.destination)
 
       osc.start()
-      osc.stop(ctx.currentTime + 0.04)
+      osc.stop(ctx.currentTime + 0.035)
     } catch {
-      // AudioContext failed or blocked by autoplay policy
-    }
-  }
-
-  // Record an action in the live state inspector stream
-  function recordAction(name: string, payload?: string | number | null) {
-    const timeStr = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    actionLogs.value.unshift({
-      id: ++logIdCounter,
-      name,
-      payload,
-      timestamp: timeStr,
-    })
-    if (actionLogs.value.length > 25) {
-      actionLogs.value.pop()
+      // Audio autoplay policy or unavailable
     }
   }
 
   // =========================================================================
-  // ACTIONS
+  // INTERNAL HELPERS
   // =========================================================================
   function insertAtCursor(text: string) {
     expr.value = beforeCursor.value + text + afterCursor.value
@@ -111,12 +106,14 @@ export const useCalculatorStore = defineStore('calculator', () => {
     answer.value = null
   }
 
+  // =========================================================================
+  // ACTIONS
+  // =========================================================================
   function inputDigit(digit: string) {
     playClickSound('num')
-    recordAction('inputDigit', digit)
     startNewLine()
-    
-    // Line cannot start with "0" unless followed by dot
+
+    // Prevent leading zero unless followed by dot
     if (digit === '0' && beforeCursor.value === '') return
     if (beforeCursor.value.endsWith('A')) insertAtCursor('×')
     insertAtCursor(digit)
@@ -124,52 +121,25 @@ export const useCalculatorStore = defineStore('calculator', () => {
 
   function inputDot() {
     playClickSound('num')
-    recordAction('inputDot', '.')
     startNewLine()
     if (beforeCursor.value.endsWith('A')) insertAtCursor('×')
     const dot = dotToInsert(beforeCursor.value)
     if (dot) insertAtCursor(dot)
   }
 
-  function inputSqrt() {
-    playClickSound('op')
-    recordAction('inputSqrt', '√')
-    startNewLine()
-    if (endsWithValue(beforeCursor.value)) insertAtCursor('×')
-    insertAtCursor('√')
-  }
-
-  function inputNthRoot() {
-    playClickSound('op')
-    recordAction('inputNthRoot', 'ⁿ')
-    startNewLine()
-    if (!endsWithValue(beforeCursor.value)) return
-    insertAtCursor('ⁿ')
-  }
-
-  function inputAns() {
-    playClickSound('num')
-    recordAction('inputAns', 'Ans')
-    startNewLine()
-    if (endsWithValue(beforeCursor.value)) insertAtCursor('×')
-    insertAtCursor('A')
-  }
-
   function chooseOperator(op: Operator) {
     playClickSound('op')
-    recordAction('chooseOperator', op)
     if (answer.value !== null) {
       if (answer.value === 'Error') {
         clearAll()
         return
       }
-      // Chain next calculation using previous answer
       expr.value = answer.value
       cursor.value = expr.value.length
       answer.value = null
     }
 
-    // If starting on an empty line with an operator like +, ×, ÷, ^: use Ans if available
+    // If typing an operator on empty line, use Ans if available
     if (beforeCursor.value === '' && afterCursor.value === '' && op !== '-') {
       if (lastAnswer.value !== 0) {
         insertAtCursor('A')
@@ -178,7 +148,7 @@ export const useCalculatorStore = defineStore('calculator', () => {
       }
     }
 
-    // If preceding character is already an operator, replace it
+    // Replace consecutive operator if needed
     if (/[+\-×÷^]$/.test(beforeCursor.value)) {
       const before = beforeCursor.value.slice(0, -1)
       expr.value = before + op + afterCursor.value
@@ -188,11 +158,115 @@ export const useCalculatorStore = defineStore('calculator', () => {
     insertAtCursor(op)
   }
 
+  // Scientific Functions (sin, cos, tan, log, ln, etc.)
+  function inputFunction(fn: string) {
+    playClickSound('op')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('×')
+    }
+    insertAtCursor(fn + '(')
+    isShift.value = false
+  }
+
+  // Constants: π and e
+  function inputConstant(c: 'π' | 'e') {
+    playClickSound('num')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('×')
+    }
+    insertAtCursor(c)
+  }
+
+  // Parentheses: ( and )
+  function inputParenthesis(p: '(' | ')') {
+    playClickSound('op')
+    startNewLine()
+    if (p === '(' && endsWithValue(beforeCursor.value)) {
+      insertAtCursor('×')
+    }
+    insertAtCursor(p)
+  }
+
+  // Powers and Roots
+  function inputPower() {
+    playClickSound('op')
+    chooseOperator('^')
+  }
+
+  function inputSquare() {
+    playClickSound('op')
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('^2')
+    }
+  }
+
+  function inputSqrt() {
+    playClickSound('op')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('×')
+    }
+    insertAtCursor('√')
+  }
+
+  function inputCubeRoot() {
+    playClickSound('op')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('×')
+    }
+    insertAtCursor('³√')
+  }
+
+  function inputNthRoot() {
+    playClickSound('op')
+    startNewLine()
+    if (!endsWithValue(beforeCursor.value)) return
+    insertAtCursor('ⁿ')
+  }
+
+  function inputFactorial() {
+    playClickSound('op')
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('!')
+    }
+  }
+
+  function inputPercentage() {
+    playClickSound('op')
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('%')
+    }
+  }
+
+  function inputReciprocal() {
+    playClickSound('op')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) {
+      insertAtCursor('^(-1)')
+    } else {
+      insertAtCursor('1/(')
+    }
+  }
+
   function toggleNegate() {
     playClickSound('op')
-    recordAction('toggleNegate')
-    startNewLine()
-    if (beforeCursor.value === '' || /[+×÷^]$/.test(beforeCursor.value)) {
+    if (answer.value !== null) {
+      if (answer.value === 'Error') {
+        clearAll()
+        return
+      }
+      expr.value = answer.value.startsWith('-')
+        ? answer.value.slice(1)
+        : '-' + answer.value
+      cursor.value = expr.value.length
+      answer.value = null
+      return
+    }
+
+    if (beforeCursor.value === '' || /[+×÷^(]$/.test(beforeCursor.value)) {
       insertAtCursor('-')
     } else if (beforeCursor.value.endsWith('-')) {
       const before = beforeCursor.value.slice(0, -1)
@@ -205,16 +279,44 @@ export const useCalculatorStore = defineStore('calculator', () => {
     }
   }
 
+  function toggleAngleMode() {
+    playClickSound('action')
+    angleMode.value = angleMode.value === 'DEG' ? 'RAD' : 'DEG'
+    saveStateToStorage()
+  }
+
+  function toggleShift() {
+    playClickSound('shift')
+    isShift.value = !isShift.value
+  }
+
+  function inputAns() {
+    playClickSound('num')
+    startNewLine()
+    if (endsWithValue(beforeCursor.value)) insertAtCursor('×')
+    insertAtCursor('A')
+  }
+
   function backspace() {
     playClickSound('action')
-    recordAction('backspace')
     if (answer.value !== null) {
       answer.value = null
       return
     }
     if (cursor.value === 0) return
-    
-    // Remove the single character right before cursor
+
+    // Smart backspace: delete multi-character function tokens at once
+    const funcMatches = ['asin(', 'acos(', 'atan(', 'sin⁻¹(', 'cos⁻¹(', 'tan⁻¹(', 'sin(', 'cos(', 'tan(', 'log(', 'ln(', 'abs(', '³√']
+    for (const fn of funcMatches) {
+      if (beforeCursor.value.endsWith(fn)) {
+        const before = beforeCursor.value.slice(0, -fn.length)
+        expr.value = before + afterCursor.value
+        cursor.value = Math.max(0, cursor.value - fn.length)
+        return
+      }
+    }
+
+    // Default: delete 1 character before cursor
     const before = beforeCursor.value.slice(0, -1)
     expr.value = before + afterCursor.value
     cursor.value = Math.max(0, cursor.value - 1)
@@ -222,11 +324,11 @@ export const useCalculatorStore = defineStore('calculator', () => {
 
   function moveCursor(where: CursorMove) {
     playClickSound('action')
-    recordAction('moveCursor', where)
     answer.value = null
 
     if (where === 'left') cursor.value = Math.max(0, cursor.value - 1)
-    else if (where === 'right') cursor.value = Math.min(expr.value.length, cursor.value + 1)
+    else if (where === 'right')
+      cursor.value = Math.min(expr.value.length, cursor.value + 1)
     else if (where === 'start') cursor.value = 0
     else cursor.value = expr.value.length
   }
@@ -238,27 +340,35 @@ export const useCalculatorStore = defineStore('calculator', () => {
 
   function equals() {
     playClickSound('equal')
-    recordAction('equals')
     if (expr.value === '') return
     cursor.value = expr.value.length
 
     try {
-      const result = evaluateExpression(expr.value, lastAnswer.value)
+      const result = evaluateExpression(
+        expr.value,
+        lastAnswer.value,
+        angleMode.value
+      )
       answer.value = format(result)
 
       if (Number.isFinite(result)) {
         lastAnswer.value = result
-        history.value = pushHistory(history.value, expr.value, answer.value)
+        history.value = pushHistory(
+          history.value,
+          expr.value,
+          answer.value,
+          angleMode.value
+        )
       }
     } catch {
       answer.value = 'Error'
     }
+
     saveStateToStorage()
   }
 
   function restoreHistory(raw: string) {
     playClickSound('action')
-    recordAction('restoreHistory', raw)
     expr.value = raw
     cursor.value = raw.length
     answer.value = null
@@ -266,27 +376,21 @@ export const useCalculatorStore = defineStore('calculator', () => {
 
   function clearHistory() {
     playClickSound('action')
-    recordAction('clearHistory')
     history.value = []
     saveStateToStorage()
   }
 
   function clearAll() {
     playClickSound('action')
-    recordAction('clearAll')
     expr.value = ''
     cursor.value = 0
     answer.value = null
+    isShift.value = false
   }
 
   function toggleSound() {
     soundEnabled.value = !soundEnabled.value
     if (soundEnabled.value) playClickSound('action')
-    saveStateToStorage()
-  }
-
-  function setTheme(newTheme: CalculatorTheme) {
-    theme.value = newTheme
     saveStateToStorage()
   }
 
@@ -298,14 +402,14 @@ export const useCalculatorStore = defineStore('calculator', () => {
       isCopied.value = true
       setTimeout(() => {
         isCopied.value = false
-      }, 1800)
+      }, 1600)
     } catch {
-      // Clipboard write failed
+      // Clipboard write blocked
     }
   }
 
   // =========================================================================
-  // PERSISTENCE (localStorage sync)
+  // PERSISTENCE (localStorage)
   // =========================================================================
   function saveStateToStorage() {
     if (!import.meta.client) return
@@ -313,9 +417,9 @@ export const useCalculatorStore = defineStore('calculator', () => {
       localStorage.setItem('calc-history', JSON.stringify(history.value))
       localStorage.setItem('calc-last', String(lastAnswer.value))
       localStorage.setItem('calc-sound', JSON.stringify(soundEnabled.value))
-      localStorage.setItem('calc-theme', theme.value)
+      localStorage.setItem('calc-angle-mode', angleMode.value)
     } catch {
-      // Storage unavailable or disabled
+      // Storage unavailable
     }
   }
 
@@ -333,16 +437,15 @@ export const useCalculatorStore = defineStore('calculator', () => {
         soundEnabled.value = JSON.parse(savedSound)
       }
 
-      const savedTheme = localStorage.getItem('calc-theme') as CalculatorTheme | null
-      if (savedTheme && ['obsidian', 'cyberpunk', 'retro-amber', 'slate'].includes(savedTheme)) {
-        theme.value = savedTheme
+      const savedAngle = localStorage.getItem('calc-angle-mode') as AngleMode | null
+      if (savedAngle === 'DEG' || savedAngle === 'RAD') {
+        angleMode.value = savedAngle
       }
     } catch {
-      // ignore corrupt data
+      // Ignore corrupt storage
     }
   }
 
-  // Initialize on client
   if (import.meta.client) {
     loadStateFromStorage()
   }
@@ -353,10 +456,10 @@ export const useCalculatorStore = defineStore('calculator', () => {
     answer,
     lastAnswer,
     cursor,
+    angleMode,
+    isShift,
     history,
     soundEnabled,
-    theme,
-    actionLogs,
     isCopied,
     // Getters
     beforeCursor,
@@ -365,14 +468,26 @@ export const useCalculatorStore = defineStore('calculator', () => {
     hasExpression,
     historyCount,
     isResultReady,
+    isDeg,
     // Actions
     inputDigit,
     inputDot,
-    inputSqrt,
-    inputNthRoot,
-    inputAns,
     chooseOperator,
+    inputFunction,
+    inputConstant,
+    inputParenthesis,
+    inputPower,
+    inputSquare,
+    inputSqrt,
+    inputCubeRoot,
+    inputNthRoot,
+    inputFactorial,
+    inputPercentage,
+    inputReciprocal,
     toggleNegate,
+    toggleAngleMode,
+    toggleShift,
+    inputAns,
     backspace,
     moveCursor,
     setCursorPosition,
@@ -381,9 +496,7 @@ export const useCalculatorStore = defineStore('calculator', () => {
     clearHistory,
     clearAll,
     toggleSound,
-    setTheme,
     copyToClipboard,
     loadStateFromStorage,
   }
 })
-

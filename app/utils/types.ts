@@ -1,25 +1,33 @@
 // app/utils/types.ts
-// ^ the shapes and fixed values every other calculator file agrees on.
-// & nothing here does any work — it only describes what the data looks like.
+// ^ Shared types and constants for the Scientific Calculator.
 
-// &one finished sum, as it is kept in history.
-// &raw = what to put back in the calculator, shown = what to read on screen
-export type HistoryItem = { raw: string; shown: string; result: string }
+export type AngleMode = 'DEG' | 'RAD'
 
-// &one run of text on the display, already worked out for size and height.
-// &bar = does it get a line over it (under a √), level = how high it sits
-export type DisplayPart = { text: string; bar: boolean; level: number; chunks: string[] }
+// One finished calculation entry in history
+export interface HistoryItem {
+  raw: string
+  shown: string
+  result: string
+  angleMode?: AngleMode
+  timestamp?: string
+}
 
-// &how many sums to keep before the oldest ones drop off the end
-export const MAX_HISTORY = 20
+// Visual run of text on the display
+export interface DisplayPart {
+  text: string
+  bar: boolean
+  level: number
+  chunks: string[]
+}
 
-// &a marker for where the cursor is. it is slipped into the text just for
-// &drawing, so it travels inside whichever run it lands in and comes out at
-// &the right size and height — even inside an exponent or under a root bar.
+// Max history items persisted
+export const MAX_HISTORY = 25
+
+// Control character for tracking the cursor position in rendered text
 export const CURSOR = '\u0001'
 
-// &where the arrow pad can send the cursor
+// Cursor navigation targets
 export type CursorMove = 'left' | 'right' | 'start' | 'end'
 
-// &the operators that sit between two values, as the keypad sends them
-export type Operator = '+' | '-' | '×' | '÷' | '^'
+// Binary operators
+export type Operator = '+' | '-' | '×' | '÷' | '^' | 'ⁿ'
