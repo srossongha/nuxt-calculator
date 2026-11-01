@@ -9,7 +9,7 @@
 import { storeToRefs } from 'pinia'
 import { useCalculatorStore } from '~/stores/calculator'
 import { useCounterStore } from '~/stores/counter'
-import { ArrowLeftIcon, SparklesIcon, CalculatorIcon } from '@heroicons/vue/20/solid'
+import { ArrowLeftIcon, ArrowPathIcon, CheckCircleIcon, SparklesIcon } from '@heroicons/vue/20/solid'
 
 // 1. Local ref (isolated to this component only)
 const localClicks = ref(0)
@@ -23,7 +23,7 @@ const { count, doubleCount, isEven } = storeToRefs(counterStore)
 
 // 4. Pinia Calculator Store (Shared calculator state)
 const calcStore = useCalculatorStore()
-const { expr, answer, lastAnswer, historyCount, angleMode, history } = storeToRefs(calcStore)
+const { expr, answer, lastAnswer, historyCount, actionLogs } = storeToRefs(calcStore)
 
 function testCalculateInStore() {
   calcStore.clearAll()
@@ -83,7 +83,7 @@ function testCalculateInStore() {
               </span>
             </div>
             <p class="text-xs text-neutral-400">
-              Scoped strictly to this component. Navigating away destroys this value completely.
+              Scoped strictly to this page. Navigating away destroys this value completely.
             </p>
           </div>
 
@@ -111,7 +111,7 @@ function testCalculateInStore() {
               </span>
             </div>
             <p class="text-xs text-neutral-400">
-              SSR-friendly global ref shared across pages in memory, but lacks getters, actions, and persistence.
+              SSR-friendly global ref shared across pages, but lacks actions, getters, and DevTools.
             </p>
           </div>
 
@@ -193,7 +193,7 @@ function testCalculateInStore() {
           <span class="font-mono text-xs text-neutral-400">{{ historyCount }} calculations saved in Pinia</span>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 font-mono text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
           <div class="rounded-xl bg-black/40 p-3 border border-white/5">
             <span class="text-neutral-500 block text-[10px]">CURRENT EXPR</span>
             <span class="text-emerald-300 font-bold text-sm truncate block">{{ expr || '— (empty)' }}</span>
@@ -207,33 +207,29 @@ function testCalculateInStore() {
             <span class="text-amber-300 font-bold text-sm truncate block">{{ lastAnswer }}</span>
           </div>
           <div class="rounded-xl bg-black/40 p-3 border border-white/5">
-            <span class="text-neutral-500 block text-[10px]">ANGLE MODE</span>
-            <span class="text-emerald-400 font-bold text-sm truncate block">{{ angleMode }}</span>
-          </div>
-          <div class="rounded-xl bg-black/40 p-3 border border-white/5">
             <span class="text-neutral-500 block text-[10px]">HISTORY ITEMS</span>
             <span class="text-purple-300 font-bold text-sm truncate block">{{ historyCount }} items</span>
           </div>
         </div>
 
-        <!-- Recent Calculation Log -->
+        <!-- Recent Actions -->
         <div>
-          <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">Saved History in Store</span>
-          <div class="max-h-40 overflow-y-auto space-y-1 font-mono text-xs">
+          <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">Dispatched Action Stream</span>
+          <div class="max-h-36 overflow-y-auto space-y-1 font-mono text-xs">
             <div
-              v-for="(item, i) in history.slice(0, 5)"
-              :key="i"
+              v-for="log in actionLogs"
+              :key="log.id"
               class="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5"
             >
               <div class="flex items-center gap-2">
-                <CalculatorIcon class="size-3.5 text-emerald-400" />
-                <span class="text-neutral-300">{{ item.shown }}</span>
-                <span class="text-emerald-300 font-semibold">= {{ item.result }}</span>
+                <CheckCircleIcon class="size-3.5 text-emerald-400" />
+                <span class="text-emerald-300 font-semibold">{{ log.name }}</span>
+                <span v-if="log.payload !== undefined" class="text-neutral-400">payload: {{ log.payload }}</span>
               </div>
-              <span class="text-[10px] text-neutral-500">{{ item.timestamp }}</span>
+              <span class="text-[10px] text-neutral-500">{{ log.timestamp }}</span>
             </div>
-            <p v-if="history.length === 0" class="text-xs text-neutral-500 italic py-2">
-              No calculations saved yet. Return to the calculator to compute some sums!
+            <p v-if="actionLogs.length === 0" class="text-xs text-neutral-500 italic py-2">
+              No actions dispatched yet. Open the calculator and start pressing buttons!
             </p>
           </div>
         </div>

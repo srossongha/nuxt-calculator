@@ -1,56 +1,31 @@
 // app/utils/history.ts
-// ^ History queue management for finished calculations.
-// & Pure functions: immutable list in, new list out.
+// ^ the saved list of finished sums, newest first.
+// & every function here takes a list and returns a NEW list. none of them edit
+// & the list they were handed — the caller decides what to do with the result.
 
-import { MAX_HISTORY, type HistoryItem, type AngleMode } from './types'
+import { MAX_HISTORY, type HistoryItem } from './types'
 import { prettify } from './display'
 
-// Drops invalid or corrupted items from stored history
-export function sanitizeHistory(
-  items: unknown,
-  max = MAX_HISTORY
-): HistoryItem[] {
+// &drop anything that isn't a proper entry, in case the saved data is old
+export function sanitizeHistory(items: unknown, max = MAX_HISTORY): HistoryItem[] {
   if (!Array.isArray(items)) return []
   return items
-    .filter(
-      (item): item is HistoryItem =>
-        !!item &&
-        typeof item.raw === 'string' &&
-        typeof item.shown === 'string' &&
-        typeof item.result === 'string'
-    )
+    .filter((item): item is HistoryItem =>
+      !!item &&
+      typeof item.raw === 'string' &&
+      typeof item.shown === 'string' &&
+      typeof item.result === 'string')
     .slice(0, max)
 }
 
-// Extracts the last valid numeric answer from history
+// &Ans should survive a refresh too — the newest saved result IS the last answer
 export function lastAnswerFrom(history: HistoryItem[], fallback = 0): number {
   const newest = history[0]
-  if (newest && Number.isFinite(Number(newest.result))) {
-    return Number(newest.result)
-  }
+  if (newest && Number.isFinite(Number(newest.result))) return Number(newest.result)
   return fallback
 }
 
-// Adds calculation to the front of history with timestamp
-export function pushHistory(
-  history: HistoryItem[],
-  raw: string,
-  result: string,
-  angleMode?: AngleMode,
-  max = MAX_HISTORY
-): HistoryItem[] {
-  const time = new Date().toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  return [
-    {
-      raw,
-      shown: prettify(raw),
-      result,
-      angleMode,
-      timestamp: time,
-    },
-    ...history,
-  ].slice(0, max)
+// &adds one sum to the front and trims the tail, so the list stops growing
+export function pushHistory(history: HistoryItem[], raw: string, result: string, max = MAX_HISTORY): HistoryItem[] {
+  return [{ raw, shown: prettify(raw), result }, ...history].slice(0, max)
 }

@@ -1,22 +1,24 @@
 // app/composables/useCalculator.ts
-// ^ Bridge composable exposing reactive state and actions from the Pinia calculator store.
+// ^ Bridge composable: connects components to the Pinia calculator store.
+// & In modern Vue/Nuxt architecture, state lives in stores (app/stores/calculator.ts),
+// & while composables provide convenient hooks and reactive bindings.
 
 import { storeToRefs } from 'pinia'
 import { useCalculatorStore } from '~/stores/calculator'
 
 export function useCalculator() {
   const store = useCalculatorStore()
-
-  // storeToRefs keeps reactive state and computed getters intact
+  
+  // storeToRefs preserves reactivity when destructuring state and getters
   const {
     expr,
     answer,
     lastAnswer,
     cursor,
-    angleMode,
-    isShift,
     history,
     soundEnabled,
+    theme,
+    actionLogs,
     isCopied,
     beforeCursor,
     afterCursor,
@@ -24,19 +26,18 @@ export function useCalculator() {
     hasExpression,
     historyCount,
     isResultReady,
-    isDeg,
   } = storeToRefs(store)
 
   return {
-    // State & Getters
+    // Reactive State & Getters
     expr,
     answer,
     lastAnswer,
     cursor,
-    angleMode,
-    isShift,
     history,
     soundEnabled,
+    theme,
+    actionLogs,
     isCopied,
     beforeCursor,
     afterCursor,
@@ -44,27 +45,14 @@ export function useCalculator() {
     hasExpression,
     historyCount,
     isResultReady,
-    isDeg,
 
     // Store Actions
     inputDigit: store.inputDigit,
     inputDot: store.inputDot,
-    chooseOperator: store.chooseOperator,
-    inputFunction: store.inputFunction,
-    inputConstant: store.inputConstant,
-    inputParenthesis: store.inputParenthesis,
-    inputPower: store.inputPower,
-    inputSquare: store.inputSquare,
     inputSqrt: store.inputSqrt,
-    inputCubeRoot: store.inputCubeRoot,
     inputNthRoot: store.inputNthRoot,
-    inputFactorial: store.inputFactorial,
-    inputPercentage: store.inputPercentage,
-    inputReciprocal: store.inputReciprocal,
-    toggleNegate: store.toggleNegate,
-    toggleAngleMode: store.toggleAngleMode,
-    toggleShift: store.toggleShift,
     inputAns: store.inputAns,
+    chooseOperator: store.chooseOperator,
     backspace: store.backspace,
     moveCursor: store.moveCursor,
     setCursorPosition: store.setCursorPosition,
@@ -73,9 +61,10 @@ export function useCalculator() {
     clearHistory: store.clearHistory,
     clearAll: store.clearAll,
     toggleSound: store.toggleSound,
+    setTheme: store.setTheme,
     copyToClipboard: store.copyToClipboard,
-
-    // Direct store instance
+    
+    // Direct store reference
     store,
   }
 }
