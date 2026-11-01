@@ -1,24 +1,24 @@
+// app/composables/counter.ts
+// ^ Bridge composable for the Pinia counter store.
+// & Demonstrates state management: compare Pinia store with local ref and useState!
+
+import { storeToRefs } from 'pinia'
+import { useCounterStore } from '~/stores/counter'
+
 export function useCounter() {
-  const counter = useLocalStorage('counter', 0)
+  const store = useCounterStore()
+  const { count, doubleCount, isEven } = storeToRefs(store)
 
-
-  // !for localstorage simple  {#ebf,12}
-  // onMounted(() => {
-  //   const saved = localStorage.getItem('counter')
-  //   if (saved !== null && Number.isFinite(Number(saved))) {
-  //     counter.value = Number(saved)
-  //   }
-  // })
-
-
-  // watch(counter, (value) => {
-  //   if (import.meta.client) localStorage.setItem('counter', String(value))
-  // })
-
-
-  const incresment = () => counter.value++
-  const decrement = () => {if (counter.value >0 ) counter.value-- }
-
-
-  return {counter, incresment, decrement}
+  return {
+    counter: count,
+    count,
+    doubleCount,
+    isEven,
+    increment: store.increment,
+    incresment: store.increment, // alias for backwards compatibility
+    decrement: store.decrement,
+    reset: store.reset,
+    setCount: store.setCount,
+    store,
+  }
 }

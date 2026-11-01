@@ -3,6 +3,9 @@
 // & every function here takes a list and returns a NEW list. none of them edit
 // & the list they were handed — the caller decides what to do with the result.
 
+import { MAX_HISTORY, type HistoryItem } from './types'
+import { prettify } from './display'
+
 // &drop anything that isn't a proper entry, in case the saved data is old
 export function sanitizeHistory(items: unknown, max = MAX_HISTORY): HistoryItem[] {
   if (!Array.isArray(items)) return []

@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+/* Custom utility & aesthetic adjustments */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tactile keypress active effect */
+.btn-press {
+  transition: transform 75ms ease, box-shadow 75ms ease, background-color 150ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn-press:active {
+  transform: translateY(1.5px) scale(0.97);
+}

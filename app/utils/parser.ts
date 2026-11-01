@@ -3,6 +3,8 @@
 // & two stages: tokenize() chops the text into pieces, evaluate() reads the
 // & pieces and works out the answer. neither knows anything about Vue.
 
+import { calculate } from './math'
+
 // splits the text into pieces:  "5+3×2"  ->  ["5", "+", "3", "×", "2"]
 // &digits and dots stick together into one piece, so "3.5" stays one number
 // &instead of becoming "3", ".", "5"
@@ -11,6 +13,10 @@ export function tokenize(text: string): string[] {
   let i = 0
   while (i < text.length) {
     const char = text[i]!
+    if (/\s/.test(char)) {
+      i++
+      continue
+    }
     if (/[0-9.]/.test(char)) {
       let number = char
       i++
@@ -78,6 +84,10 @@ export function evaluate(tokens: string[], lastAnswer = 0): number {
 
   // ^ strongest: a sign stuck in front of a value ("-5", "√9"), or just a number
   function readUnary(): number {
+    if (tokens[pos] === '+') {
+      pos++
+      return readUnary()
+    }
     if (tokens[pos] === '-') { //! ignore the minus if in the front expr
       pos++
       return -readUnary()

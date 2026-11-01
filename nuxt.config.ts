@@ -5,6 +5,9 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   // kept for the Pinia store coming later — remove if that plan changes
   modules: ['@pinia/nuxt'],
+  imports: {
+    dirs: ['stores'],
+  },
   vite: {
     plugins: [
       tailwindcss()

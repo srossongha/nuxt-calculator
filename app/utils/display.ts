@@ -3,6 +3,8 @@
 // & parser.ts answers "what does this equal". this file answers "what should
 // & this look like" — where the root bars go, and what rides up as an exponent.
 
+import { CURSOR, type DisplayPart } from './types'
+
 // &the stored text uses short codes, so swap them for what they mean.
 // &history.ts uses this to build the label you read in the history list
 export function prettify(text: string): string {
